@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const multer = require('multer');
 const path = require('path');
+const User = require('./../models/user');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -14,11 +15,15 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
-  fileFilter: (req, file, cb) => {
-    console.log('file from filter', file);
-    cb(false)
+  fileFilter: (req, { fieldname, mimetype, originalname }, cb) => {
+    const isProfile =
+      fieldname == 'profile_picture' && mimetype == 'image/jpeg';
+    const isCV = fieldname == 'cv_file' && mimetype == 'application/pdf';
+
+    if (isProfile) cb(null, true);
+    else if (isCV) cb(null, true);
+    else cb(new Error(`Sorry 😩 The type of ${originalname} not support.`), false);
   },
-  // dest: path.join(__dirname, 'public', 'upload'),
   storage,
 });
 
@@ -42,9 +47,24 @@ const userFilesHandler = upload.fields([
   },
 ]);
 
-router.post('/add_user', userFilesHandler, (req, res) => {
-  console.log(JSON.stringify(req.body));
-  res.send('hi');
+router.post('/add_user', userFilesHandler, async (req, res) => {
+  try {
+    const { full_name, username, email } = req.body;
+    const { profile_picture, cv_file } = req.files;
+
+    await User.insertMany({
+      full_name,
+      username,
+      email,
+      profile_picture: profile_picture[0].path,
+      cv_file: cv_file[0].path,
+    });
+
+    res.send('hi');
+  } catch (err) {
+    console.log(err.writeErrors);
+    res.json(err.writeErrors[0].errmsg);
+  }
 });
 
 module.exports = router;
